@@ -84,36 +84,6 @@ class BucketBrigade():
     def get_moments(self):
         return self.circuit.moments
 
-    # def remove_T_gates(self, percentage):
-    #
-    #     if percentage >= 1.0:
-    #         raise ValueError('Percentage needs to be lower then 100%.')
-    #     moments_list = self.get_moments()
-    #
-    #     # find how many T gates there are and what are their position
-    #     T_count, T_positions = count_ops(self.circuit, [cirq.T, cirq.T ** -1],
-    #                                      return_indices=True)
-    #     gate_count = count_num_gates(self.circuit)
-    #     remove_count = int(math.ceil(T_count * percentage))
-    #
-    #     # randomly pick indices to remove
-    #     random_indices_to_remove = np.random.choice(T_positions, size=remove_count, replace=False)
-    #
-    #     # create new_moments to store gates
-    #     new_moments = []
-    #     position = 0
-    #     for moment in moments_list:
-    #         moment_ops = []
-    #         for operation in moment:
-    #             position += 1
-    #
-    #             if position not in random_indices_to_remove:
-    #                 moment_ops.append(operation)
-    #
-    #         new_moments.append(cirq.Moment(moment_ops))
-    #         circuit = cirq.Circuit(new_moments)
-    #         return circuit
-
     def construct_fan_structure(self, qubits):
         n = len(qubits)
 
@@ -123,10 +93,11 @@ class BucketBrigade():
         all_ancillas += anc_created
 
         compute_fanin_moments = [
+            cirq.Moment([cirq.ops.X(anc_created[1])]),
             cirq.Moment([cirq.ops.CNOT(qubits[0], anc_created[0])]),
-            cirq.Moment([cirq.ops.CNOT(anc_created[0], anc_created[1])])
+            cirq.Moment([cirq.ops.CNOT(anc_created[0], anc_created[1])]),
+            # cirq.Moment([cirq.ops.CNOT(qubits[0], anc_created[0])])
         ]
-
         # circuit.append(cirq.ops.CNOT(qubits[0], anc_created[0]))
         # circuit.append(cirq.ops.CNOT(anc_created[0], anc_created[1]))
         # we will need the ancillae
@@ -135,8 +106,7 @@ class BucketBrigade():
         for i in range(1, n):
             # defining the new ancillae
             # in each iteration we create 2**i new ancillae
-            anc_created = [cirq.NamedQubit(self.get_b_ancilla_name(i, n)) for i in
-                           range(2 ** i, 2 ** (i + 1))]
+            anc_created = [cirq.NamedQubit(self.get_b_ancilla_name(i, n)) for i in range(2 ** i, 2 ** (i + 1))]
             # all_ancillas += anc_created
 
             # The number of created ancillas equals the number of previous ancilla
@@ -217,11 +187,7 @@ class BucketBrigade():
             Adding the FANIN
         """
 
-        comp_fan_in = cirq.Circuit(
-            ToffoliDecomposition.
-            construct_decomposed_moments(compute_fanin_moments,
-                                         self.decomp_scenario.dec_fan_in)
-        )
+        comp_fan_in = cirq.Circuit(ToffoliDecomposition.construct_decomposed_moments(compute_fanin_moments, self.decomp_scenario.dec_fan_in))
 
         # If necessary, parallelise the Toffoli decompositions
         if self.decomp_scenario.parallel_toffolis:
@@ -235,17 +201,13 @@ class BucketBrigade():
         # wiring with the memory
         memory_operations = []
         for i in range(len(memory)):
-            mem_toff = cirq.TOFFOLI.on(
-                all_ancillas[len(memory) - 1 - i],
-                memory[i],
-                target)
-
+            mem_toff = cirq.TOFFOLI.on(all_ancillas[len(memory) - 1 - i], memory[i], target)
             memory_operations.append(cirq.Moment([mem_toff]))
 
         permutation = [0, 1, 2]
         # If necessary, prepare for the parallelisation of Toffoli decompositions
         if self.decomp_scenario.parallel_toffolis:
-            permutation = [0, 2, 1]
+            permutation = [0, 1, 2]
 
         # Create a sub-circuit from the moments
         # TODO: This is redundant, should be from the beginning
@@ -300,22 +262,19 @@ class BucketBrigade():
 
         self._qubit_order += [target]
 
-        # circuit.insert(0, cirq.X(qubits[0]))
+        # ancilla_qubit_initialise = cirq.NamedQubit("b_000")
+        # circuit.insert(0, cirq.X(ancilla_qubit_initialise))
 
+        # memory_qubit_initialise = cirq.NamedQubit("m11")
+        # circuit.insert(0, cirq.X(memory_qubit_initialise))
 
-        ancilla_qubit_initialise = cirq.NamedQubit("b_000")
-        circuit.insert(0, cirq.X(ancilla_qubit_initialise))
+        for mem in memory:
+            circuit.insert(0, cirq.X(mem))
 
-        memory_qubit_initialise = cirq.NamedQubit("m000")
-        circuit.insert(0, cirq.X(memory_qubit_initialise))
-
-
+        # Initializing memory cell
         # circuit.insert(0, cirq.X(memory[0]))
-        # circuit.insert(0, cirq.X(memory[1]))
-        # circuit.insert(0, cirq.X(memory[2]))
-        # circuit.insert(0, cirq.X(memory[3]))
 
-        # Add measurement to the target qubit
+        # Measuring target qubit
         circuit.append(cirq.measure(target, key="r"))
 
         return circuit

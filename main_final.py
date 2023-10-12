@@ -4,7 +4,12 @@ from qramcircuits.toffoli_decomposition import ToffoliDecompType
 from utils import counting_utils as cu
 import math
 import numpy as np
+import optimizers as qopt
+import matplotlib.pyplot as plt
+import itertools
 
+# def all_possible_addresses(num_qubits):
+#     return itertools.product([0, 1], repeat=num_qubits)
 
 def remove_T_gates(circuit, percentage):
 
@@ -15,12 +20,15 @@ def remove_T_gates(circuit, percentage):
         # find how many T gates there are and what are their position
         T_count, T_positions = cu.count_ops(circuit, [cirq.T, cirq.T ** -1], return_indices=True)
 
-        gate_count = cu.count_num_gates(circuit)
+        # print(T_count)
+        # print(T_positions)
+        # gate_count = cu.count_num_gates(circuit)
         remove_count = int(math.ceil(T_count * percentage))
+        # print(f"remove count{remove_count}")
 
         # randomly pick indices to remove
         random_indices_to_remove = np.random.choice(T_positions, size=remove_count, replace=False)
-        print(f"random indices to remove: {random_indices_to_remove}")
+        # print(f"random indices to remove: {random_indices_to_remove}")
 
         # create new_moments to store gates
         new_moments = []
@@ -39,10 +47,10 @@ def remove_T_gates(circuit, percentage):
         return circuit
 
 
-
 def main():
 
     n = 3
+
     address_qubits = [cirq.NamedQubit(f'adr_{i}') for i in range(n)]
 
     decomp_scenario = bb.BucketBrigadeDecompType(
@@ -54,22 +62,42 @@ def main():
         True
     )
 
+    no_decomp = bb.BucketBrigadeDecompType(
+        [
+            ToffoliDecompType.NO_DECOMP,
+            ToffoliDecompType.NO_DECOMP,
+            ToffoliDecompType.NO_DECOMP
+        ],
+        True
+    )
+
     bb_circuit = bb.BucketBrigade(address_qubits, decomp_scenario).construct_circuit(address_qubits)
 
-    # print(bb_circuit)
+    # Initialising Addressing qubits
+    # bb_circuit.insert(0, cirq.X(address_qubits[0]))
+    # bb_circuit.insert(0, cirq.X(address_qubits[1]))
+    # bb_circuit.insert(0, cirq.X(address_qubits[2]))
 
-    T_count, T_positions = cu.count_ops(bb_circuit, [cirq.T, cirq.T ** -1], return_indices=True)
-    print(T_count)
+    print(bb_circuit)
 
-    for T_positions in range(100):
+    percentages = [0.05, 0.10, 0.15]
 
-        modified_bb_circuit = remove_T_gates(bb_circuit, 0.90)
-        # print(modified_bb_circuit)
+    for percentage in percentages:
+        total_count_ones = 0
+        print(f"percentage{percentage}")
 
-        # Simulate the circuit
-        simulator = cirq.Simulator()
-        results = simulator.run(modified_bb_circuit, repetitions=1000)
-        print(results.histogram(key='r'))
+        for _ in range(1000):
+            modified_bb_circuit = remove_T_gates(bb_circuit, percentage)
+            simulator = cirq.Simulator()
+            results = simulator.run(modified_bb_circuit, repetitions=1000)
+            # print(results.histogram(key='r'))
+            count_ones = sum(results.data['r'])
+
+            # print(count_ones)
+            if count_ones == 1000:
+                total_count_ones += 1
+                # print(total_count_ones)
+        print(f"average count: {total_count_ones}")
 
 
 if __name__ == "__main__":
